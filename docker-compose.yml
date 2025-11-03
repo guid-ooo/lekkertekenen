@@ -6,7 +6,7 @@ services:
       args:
         - VITE_WEB_TITLE=${VITE_WEB_TITLE:-InkLink}
     expose:
-      - 80:80
+      - 3001:80
     depends_on:
       - app
     healthcheck:
