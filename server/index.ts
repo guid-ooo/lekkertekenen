@@ -236,7 +236,7 @@ const server = Bun.serve({
       return new Response(bmpBuffer, {
         headers: {
           "Content-Type": "image/bmp",
-          "Content-Disposition": "attachment; filename=drawing.bmp",
+          // "Content-Disposition": "attachment; filename=drawing.bmp",
         },
       });
     } else if (url.pathname === "/health") {
