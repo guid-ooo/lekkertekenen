@@ -5,8 +5,8 @@ services:
       dockerfile: nginx.Dockerfile
       args:
         - VITE_WEB_TITLE=${VITE_WEB_TITLE:-InkLink}
-    expose:
-      - 3001:80
+    ports:
+      - 80:80
     depends_on:
       - app
     healthcheck:
