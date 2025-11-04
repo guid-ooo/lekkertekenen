@@ -1,21 +1,26 @@
 services:
-  nginx:
+  # Renamed your 'nginx' service to 'frontend'
+  # It now only handles serving your static files and proxying to the 'app'
+  frontend:
     build:
       context: .
       dockerfile: nginx.Dockerfile
       args:
         - VITE_WEB_TITLE=${VITE_WEB_TITLE:-InkLink}
-    ports:
-      - 80:80
+    # !! PORT SECTION REMOVED !!
+    # NPM will handle external traffic
     depends_on:
       - app
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/", "&&", "curl", "-f", "http://localhost:80/health"]
+      # We check the 'app' service directly now
+      test: ["CMD", "curl", "-f", "http://app:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 2s
+    restart: unless-stopped # Added restart policy
 
+  # Your 'app' service remains unchanged
   app:
     build: .
     expose:
@@ -27,5 +32,25 @@ services:
       - drawings:/app/drawings
     restart: unless-stopped
 
+  # NEW SERVICE: Nginx Proxy Manager (NPM)
+  # This will be your new public-facing proxy and SSL handler
+  npm:
+    image: 'jc21/nginx-proxy-manager:latest'
+    restart: unless-stopped
+    ports:
+      # Public HTTP/S ports
+      - '80:80'
+      - '443:443'
+      # Admin UI port
+      - '81:81'
+    volumes:
+      # Persists NPM data and certificates
+      - npm-data:/data
+      # Persists Let's Encrypt certificates
+      - npm-letsencrypt:/etc/letsencrypt
+    
 volumes:
   drawings:
+  # NEW VOLUMES for NPM
+  npm-data:
+  npm-letsencrypt:
