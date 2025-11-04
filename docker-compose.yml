@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: nginx.Dockerfile
       args:
-        - VITE_WEB_TITLE=${VITE_WEB_TITLE:-InkLink}
+        - VITE_WEB_TITLE=${VITE_WEB_TITLE:-Lekker Tekenen}
     # !! PORT SECTION REMOVED !!
     # NPM will handle external traffic
     depends_on:
