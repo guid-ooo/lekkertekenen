@@ -288,7 +288,7 @@ const DrawingApp = () => {
     <div className="mx-auto flex flex-col items-center p-2 sm:p-3 md:p-4 max-w-full">
       <div className="flex gap-4 mb-2 md:mb-4 items-center w-full flex-wrap max-w-screen-md">
         <h1 className="text-2xl font-bold text-slate-900">
-          🎉 {import.meta.env.VITE_WEB_TITLE}
+          🎉 {"Krabbelen"}
         </h1>
         <div className="flex gap-4 items-center flex-wrap justify-end flex-grow">
           <div className="flex gap-2 items-center">
