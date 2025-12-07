@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PaintBucket } from "lucide-react";
+import { PaintBucket, Download, History, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ const DrawingApp = () => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isDisconnected, setIsDisconnected] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [showHistoryMobile, setShowHistoryMobile] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const wsRef = useRef<WebSocket>(null);
@@ -147,6 +148,30 @@ const DrawingApp = () => {
   const restoreDrawing = (id: string) => {
     console.log("Restoring drawing with id:", id);
     sendUpdate({ type: "restore", id });
+    setShowHistoryMobile(false); // Close mobile overlay after restore
+  };
+
+  const deleteHistoryItem = (id: string) => {
+    console.log("Deleting history item with id:", id);
+    sendUpdate({ type: "delete-history", id });
+  };
+
+  const downloadCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `drawing-${new Date().toISOString().slice(0, 10)}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 'image/png');
   };
 
   const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
@@ -310,7 +335,7 @@ const DrawingApp = () => {
   }, [handleDrawingUpdate]);
 
   return (
-    <div className="mx-auto flex flex-col items-center p-2 sm:p-3 md:p-4 max-w-full">
+    <div className="mx-auto flex flex-col items-center p-2 sm:p-3 md:p-4 max-w-full h-screen overflow-hidden">
       <div className="flex gap-4 mb-2 md:mb-4 items-center w-full flex-wrap max-w-screen-2xl">
         <h1 className="text-2xl font-bold text-slate-900">
           🧑‍🎨 {"Lekker Krabbelen"}
@@ -363,20 +388,34 @@ const DrawingApp = () => {
             ))}
           </div>
 
-          <Button variant="outline" onClick={handleClear}>
-            Clear
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowHistoryMobile(!showHistoryMobile)}
+              className="lg:hidden"
+            >
+              <History size={16} className="mr-1" />
+              History ({history.length})
+            </Button>
+            <Button variant="outline" onClick={downloadCanvas}>
+              <Download size={16} className="mr-1" />
+              <span className="hidden lg:inline">Download</span>
+            </Button>
+            <Button variant="outline" onClick={handleClear}>
+              Clear
+            </Button>
+          </div>
         </div>
       </div>
       
-      <div className="flex flex-col lg:flex-row gap-4 w-full max-w-screen-2xl items-start">
-          <Card className="p-3 sm:p-5 md:p-7 flex-col rounded-b-none bg-slate-400 w-fit grow">
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0 items-center lg:items-start 2xl:items-center 2xl:items-stretch justify-center gap-4 w-full h-full max-h-full">
+          <Card className="p-3 sm:p-5 md:p-7 flex-col bg-slate-400 flex shrink lg:w-full h-auto max-w-full max-h-full" style={{ aspectRatio: "1022/733" }}>
             <canvas
               ref={canvasRef}
               width={800}
               height={480}
               style={{ imageRendering: "pixelated" }}
-              className="cursor-crosshair max-w-full touch-pinch-zoom w-full"
+              className="cursor-crosshair max-w-full touch-pinch-zoom w-full flex-1"
               onMouseDown={(e) => {
                 if (tool === "fill") {
                   handleFill(e);
@@ -398,7 +437,7 @@ const DrawingApp = () => {
               onTouchEnd={endDrawing}
               onTouchCancel={endDrawing}
             />
-            <div className="flex justify-center pt-5 sm:pt-8 md:pt-12 pb-1 sm:pb-2 md:pb-3 h-10 sm:h-16 md:h-24">
+            <div className="flex justify-center pt-5 pb-1 sm:py-[1.5rem] md:pb-0 h-10 lg:h-12">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 height="100%"
@@ -412,8 +451,28 @@ const DrawingApp = () => {
             </div>
           </Card>
         
-        <div className="w-full lg:w-80 lg:sticky lg:top-4">
-          <HistoryPanel history={history} onRestore={restoreDrawing} />
+        {/* Desktop: side panel, Mobile: overlay */}
+        <div className={`
+          fixed inset-0 z-50 bg-black/50 lg:hidden
+          ${showHistoryMobile ? 'block' : 'hidden'}
+        `} onClick={() => setShowHistoryMobile(false)}>
+          <div 
+            className="absolute right-0 top-0 h-full w-4/5 max-w-sm bg-slate-50 shadow-xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => setShowHistoryMobile(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-700 z-10"
+            >
+              <X size={20} />
+            </button>
+            <HistoryPanel history={history} onRestore={restoreDrawing} onDelete={deleteHistoryItem} />
+          </div>
+        </div>
+        
+        {/* Desktop only */}
+        <div className="hidden lg:flex w-full lg:w-80 flex-none flex-col h-full bg-slate-50 rounded-xl overflow-hidden border border-slate-200">
+          <HistoryPanel history={history} onRestore={restoreDrawing} onDelete={deleteHistoryItem} />
         </div>
       </div>
 

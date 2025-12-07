@@ -270,6 +270,12 @@ const restoreFromHistory = async (id: string) => {
 
   try {
     console.log(`Restoring history item ${id}...`);
+    
+    // Save current canvas to history before restoring
+    // (unless it's already blank or the same as what we're restoring)
+    await saveToHistory();
+    console.log('Saved current canvas to history before restore');
+    
     // Decode base64 PNG and load as image
     const imgBuffer = Buffer.from(item.image, "base64");
     
@@ -290,6 +296,26 @@ const restoreFromHistory = async (id: string) => {
     return true;
   } catch (e) {
     console.error("Failed to restore from history:", e);
+    return false;
+  }
+};
+
+// Delete a drawing from history
+const deleteFromHistory = async (id: string) => {
+  const index = history.findIndex(h => h.id === id);
+  if (index === -1) {
+    console.error(`History item ${id} not found`);
+    return false;
+  }
+
+  try {
+    console.log(`Deleting history item ${id}...`);
+    history.splice(index, 1);
+    await saveHistoryToDisk();
+    console.log(`Successfully deleted history item ${id}. Remaining items: ${history.length}`);
+    return true;
+  } catch (e) {
+    console.error("Failed to delete from history:", e);
     return false;
   }
 };
@@ -453,6 +479,31 @@ const server = Bun.serve({
             });
             
             return; // Don't broadcast the restore action itself
+          }
+          case "delete-history": {
+            // Delete a history item
+            console.log("Received delete request for id:", data.id);
+            
+            deleteFromHistory(data.id).then((deleted) => {
+              if (deleted) {
+                // Send updated history to all clients
+                const historyUpdate = JSON.stringify({
+                  type: "history-update",
+                  history: getHistoryList(),
+                });
+                
+                server.publish("drawing", historyUpdate);
+                ws.send(historyUpdate);
+                
+                console.log("Broadcasted updated history after deletion");
+              } else {
+                console.error("Failed to delete history item");
+              }
+            }).catch((err) => {
+              console.error("Error in delete promise:", err);
+            });
+            
+            return; // Don't broadcast the delete action itself
           }
         }
 

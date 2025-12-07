@@ -41,6 +41,11 @@ interface RestoreAction {
   id: string;
 }
 
+interface DeleteHistoryAction {
+  type: "delete-history";
+  id: string;
+}
+
 export type CanvasAction = 
   | InitAction 
   | DrawAction 
@@ -48,4 +53,5 @@ export type CanvasAction =
   | ClearAction 
   | GetHistoryAction 
   | HistoryUpdateAction 
-  | RestoreAction;
+  | RestoreAction
+  | DeleteHistoryAction;

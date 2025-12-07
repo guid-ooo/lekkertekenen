@@ -63,4 +63,14 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Prevent scrolling on mobile */
+  @media (max-width: 1023px) {
+    html, body {
+      overflow: hidden;
+      height: 100vh;
+      position: fixed;
+      width: 100%;
+    }
+  }
 }
