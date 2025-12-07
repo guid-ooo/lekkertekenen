@@ -145,6 +145,7 @@ const DrawingApp = () => {
   };
 
   const restoreDrawing = (id: string) => {
+    console.log("Restoring drawing with id:", id);
     sendUpdate({ type: "restore", id });
   };
 

@@ -1,4 +1,4 @@
-import { createCanvas, Canvas, SKRSContext2D, Image } from "@napi-rs/canvas";
+import { createCanvas, Canvas, SKRSContext2D, loadImage } from "@napi-rs/canvas";
 import PxBrush from "../shared/PxBrush";
 import { CronJob } from "cron";
 import { CanvasAction, HistoryItem } from "../shared/Actions";
@@ -261,7 +261,7 @@ const getHistoryList = () => {
 };
 
 // Restore a drawing from history
-const restoreFromHistory = (id: string) => {
+const restoreFromHistory = async (id: string) => {
   const item = history.find(h => h.id === id);
   if (!item) {
     console.error(`History item ${id} not found`);
@@ -269,11 +269,23 @@ const restoreFromHistory = (id: string) => {
   }
 
   try {
-    // Decode base64 PNG and draw to canvas using napi-rs Image
+    console.log(`Restoring history item ${id}...`);
+    // Decode base64 PNG and load as image
     const imgBuffer = Buffer.from(item.image, "base64");
-    const img = new Image();
-    img.src = imgBuffer;
+    
+    // Use loadImage which properly handles PNG buffers
+    const img = await loadImage(imgBuffer);
+    
+    console.log(`Image loaded, dimensions: ${img.width}x${img.height}`);
+    
+    // Clear canvas first
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Draw the restored image
     ctx.drawImage(img, 0, 0);
+    console.log(`Successfully restored history item ${id}`);
+    
     throttledSave();
     return true;
   } catch (e) {
@@ -414,20 +426,32 @@ const server = Bun.serve({
             return; // Don't broadcast this
           case "restore": {
             // Restore a drawing from history
-            const restored = restoreFromHistory(data.id);
-            if (restored) {
-              // Broadcast the restored state to all clients
-              setTimeout(() => {
+            console.log("Received restore request for id:", data.id);
+            
+            // Handle async restore
+            restoreFromHistory(data.id).then((restored) => {
+              if (restored) {
+                // Broadcast the restored state to all clients immediately
                 const pngBuffer = canvas.toBuffer("image/png");
-                server.publish(
-                  "drawing",
-                  JSON.stringify({
-                    type: "init",
-                    image: pngBuffer.toString("base64"),
-                  })
-                );
-              }, 100);
-            }
+                const initMessage = JSON.stringify({
+                  type: "init",
+                  image: pngBuffer.toString("base64"),
+                });
+                
+                // Send to requesting client
+                ws.send(initMessage);
+                
+                // Broadcast to all other clients
+                server.publish("drawing", initMessage);
+                
+                console.log("Broadcasted restored drawing");
+              } else {
+                console.error("Failed to restore drawing");
+              }
+            }).catch((err) => {
+              console.error("Error in restore promise:", err);
+            });
+            
             return; // Don't broadcast the restore action itself
           }
         }
