@@ -10,8 +10,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import HistoryPanel from "@/components/HistoryPanel";
 import PxBrush from "../shared/PxBrush";
-import { CanvasAction } from "../shared/Actions";
+import { CanvasAction, HistoryItem } from "../shared/Actions";
 import { fill, draw, colors, brushSizes } from "../shared/Utilities";
 
 const DrawingApp = () => {
@@ -19,6 +20,7 @@ const DrawingApp = () => {
   const [color, setColor] = useState(colors.black);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isDisconnected, setIsDisconnected] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const wsRef = useRef<WebSocket>(null);
@@ -45,10 +47,14 @@ const DrawingApp = () => {
 
     console.log("Connecting to WebSocket server...");
 
-    const ws = new WebSocket(
-      `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host
-      }/ws`
-    );
+    // Use environment variable for WebSocket URL if provided, otherwise use same host
+    const wsUrl = import.meta.env.VITE_WS_URL 
+      ? `${import.meta.env.VITE_WS_URL}/ws`
+      : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
+
+    console.log("WebSocket URL:", wsUrl);
+
+    const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       console.log("Connected to WebSocket server");
@@ -56,6 +62,13 @@ const DrawingApp = () => {
       reconnectAttemptsRef.current = 0;
       setIsDisconnected(false);
       clearTimeout(reconnectTimeoutRef.current);
+      
+      // Request history when connected
+      setTimeout(() => {
+        if (wsRef.current === ws) {
+          requestHistory();
+        }
+      }, 100);
     };
 
     ws.onclose = () => {
@@ -125,6 +138,14 @@ const DrawingApp = () => {
     if (wsRef.current) {
       wsRef.current.send(JSON.stringify(updateData));
     }
+  };
+
+  const requestHistory = () => {
+    sendUpdate({ type: "get-history" });
+  };
+
+  const restoreDrawing = (id: string) => {
+    sendUpdate({ type: "restore", id });
   };
 
   const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
@@ -270,6 +291,9 @@ const DrawingApp = () => {
       case "clear":
         clearCanvas();
         break;
+      case "history-update":
+        setHistory(data.history);
+        break;
     }
   };
 
@@ -286,7 +310,7 @@ const DrawingApp = () => {
 
   return (
     <div className="mx-auto flex flex-col items-center p-2 sm:p-3 md:p-4 max-w-full">
-      <div className="flex gap-4 mb-2 md:mb-4 items-center w-full flex-wrap max-w-screen-md">
+      <div className="flex gap-4 mb-2 md:mb-4 items-center w-full flex-wrap max-w-screen-2xl">
         <h1 className="text-2xl font-bold text-slate-900">
           🧑‍🎨 {"Lekker Krabbelen"}
         </h1>
@@ -343,47 +367,54 @@ const DrawingApp = () => {
           </Button>
         </div>
       </div>
-      <Card className="p-3 sm:p-5 md:p-7 flex-col rounded-b-none bg-slate-400">
-        <canvas
-          ref={canvasRef}
-          width={800}
-          height={480}
-          style={{ imageRendering: "pixelated" }}
-          className="cursor-crosshair max-w-full touch-pinch-zoom"
-          onMouseDown={(e) => {
-            if (tool === "fill") {
-              handleFill(e);
-            } else {
-              startDrawing(e);
-            }
-          }}
-          onTouchStart={(e) => {
-            if (tool === "fill") {
-              handleFill(e);
-            } else {
-              startDrawing(e);
-            }
-          }}
-          onMouseMove={drawing}
-          onTouchMove={drawing}
-          onMouseUp={endDrawing}
-          onMouseOut={endDrawing}
-          onTouchEnd={endDrawing}
-          onTouchCancel={endDrawing}
-        />
-        <div className="flex justify-center pt-5 sm:pt-8 md:pt-12 pb-1 sm:pb-2 md:pb-3 h-10 sm:h-16 md:h-24">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            height="100%"
-            fillRule="evenodd"
-            viewBox="0 0 27 8.31"
-          >
-            <g fillOpacity=".2">
-              <path d="M5.1 4.82v.04c-.01.03 0 .08.02.16.02.07.09.18.2.32.12.15.35.34.67.6s.82.53 1.46.85a14.4 14.4 0 0 0 7.4 1.48A12.93 12.93 0 0 0 21.17 6c.43-.32.73-.6.9-.84s.18-.42.07-.53c-.12-.1-.37-.15-.75-.13-.39.01-.89.07-1.5.16-.61.1-1.31.19-2.1.29a33.82 33.82 0 0 1-5.18.23c-.9-.04-1.77-.1-2.6-.2s-1.58-.2-2.26-.29c-.67-.1-1.2-.15-1.55-.18a2.88 2.88 0 0 0-.76.01c-.14.03-.23.08-.27.12s-.06.1-.06.12l-.01.05M0 1.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0zM24 1.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0z" />
-            </g>
-          </svg>
+      
+      <div className="flex flex-col lg:flex-row gap-4 w-full max-w-screen-2xl items-start">
+          <Card className="p-3 sm:p-5 md:p-7 flex-col rounded-b-none bg-slate-400 w-fit grow">
+            <canvas
+              ref={canvasRef}
+              width={800}
+              height={480}
+              style={{ imageRendering: "pixelated" }}
+              className="cursor-crosshair max-w-full touch-pinch-zoom w-full"
+              onMouseDown={(e) => {
+                if (tool === "fill") {
+                  handleFill(e);
+                } else {
+                  startDrawing(e);
+                }
+              }}
+              onTouchStart={(e) => {
+                if (tool === "fill") {
+                  handleFill(e);
+                } else {
+                  startDrawing(e);
+                }
+              }}
+              onMouseMove={drawing}
+              onTouchMove={drawing}
+              onMouseUp={endDrawing}
+              onMouseOut={endDrawing}
+              onTouchEnd={endDrawing}
+              onTouchCancel={endDrawing}
+            />
+            <div className="flex justify-center pt-5 sm:pt-8 md:pt-12 pb-1 sm:pb-2 md:pb-3 h-10 sm:h-16 md:h-24">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                height="100%"
+                fillRule="evenodd"
+                viewBox="0 0 27 8.31"
+              >
+                <g fillOpacity=".2">
+                  <path d="M5.1 4.82v.04c-.01.03 0 .08.02.16.02.07.09.18.2.32.12.15.35.34.67.6s.82.53 1.46.85a14.4 14.4 0 0 0 7.4 1.48A12.93 12.93 0 0 0 21.17 6c.43-.32.73-.6.9-.84s.18-.42.07-.53c-.12-.1-.37-.15-.75-.13-.39.01-.89.07-1.5.16-.61.1-1.31.19-2.1.29a33.82 33.82 0 0 1-5.18.23c-.9-.04-1.77-.1-2.6-.2s-1.58-.2-2.26-.29c-.67-.1-1.2-.15-1.55-.18a2.88 2.88 0 0 0-.76.01c-.14.03-.23.08-.27.12s-.06.1-.06.12l-.01.05M0 1.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0zM24 1.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0z" />
+                </g>
+              </svg>
+            </div>
+          </Card>
+        
+        <div className="w-full lg:w-80 lg:sticky lg:top-4">
+          <HistoryPanel history={history} onRestore={restoreDrawing} />
         </div>
-      </Card>
+      </div>
 
       <Dialog
         open={isDisconnected}

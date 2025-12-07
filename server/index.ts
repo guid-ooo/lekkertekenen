@@ -1,7 +1,7 @@
-import { createCanvas, Canvas, SKRSContext2D } from "@napi-rs/canvas";
+import { createCanvas, Canvas, SKRSContext2D, Image } from "@napi-rs/canvas";
 import PxBrush from "../shared/PxBrush";
 import { CronJob } from "cron";
-import { CanvasAction } from "../shared/Actions";
+import { CanvasAction, HistoryItem } from "../shared/Actions";
 import { brushSizes, colors, draw, fill } from "../shared/Utilities";
 
 // Server-side canvas
@@ -15,6 +15,11 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 480;
 const SAVE_THROTTLE = 5000;
 const SAVE_PATH = "./drawings/current.bmp";
+const HISTORY_PATH = "./drawings/history.json";
+const MAX_HISTORY = 10;
+
+// History storage
+let history: HistoryItem[] = [];
 
 const initialize = async () => {
   // Initialize canvas and ensure drawings directory exists
@@ -79,6 +84,9 @@ const initialize = async () => {
       console.error("Error loading existing drawing:", e);
       console.log("Starting with blank canvas");
     }
+
+    // Load history from disk
+    await loadHistory();
 
     if (process.env.CLEAR_CRON) {
       new CronJob(
@@ -178,6 +186,102 @@ const saveDrawing = async () => {
   }
 };
 
+// Load history from disk
+const loadHistory = async () => {
+  try {
+    const file = Bun.file(HISTORY_PATH);
+    const exists = await file.exists();
+    if (exists) {
+      const data = await file.json();
+      history = data as HistoryItem[];
+      console.log(`Loaded ${history.length} history items`);
+    }
+  } catch (e) {
+    console.error("Failed to load history:", e);
+    history = [];
+  }
+};
+
+// Save history to disk
+const saveHistoryToDisk = async () => {
+  try {
+    // Ensure drawings directory exists
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const dirPath = path.dirname(HISTORY_PATH);
+    
+    try {
+      await fs.access(dirPath);
+    } catch {
+      // Directory doesn't exist, create it
+      await fs.mkdir(dirPath, { recursive: true });
+    }
+    
+    await Bun.write(HISTORY_PATH, JSON.stringify(history, null, 2));
+  } catch (e) {
+    console.error("Failed to save history:", e);
+    throw e; // Re-throw to let caller handle it
+  }
+};
+
+// Add current canvas state to history
+const saveToHistory = async () => {
+  try {
+    const pngBuffer = canvas.toBuffer("image/png");
+    const historyItem: HistoryItem = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      timestamp: Date.now(),
+      image: pngBuffer.toString("base64"),
+    };
+
+    // Add to beginning of array
+    history.unshift(historyItem);
+
+    // Keep only last MAX_HISTORY items
+    if (history.length > MAX_HISTORY) {
+      history = history.slice(0, MAX_HISTORY);
+    }
+
+    // Save to disk
+    await saveHistoryToDisk();
+    console.log(`Saved to history. Total items: ${history.length}`);
+  } catch (e) {
+    console.error("Failed to save to history:", e);
+    // Don't re-throw - let the operation continue even if history fails
+  }
+};
+
+// Get history list (without full image data for efficiency)
+const getHistoryList = () => {
+  return history.map(item => ({
+    id: item.id,
+    timestamp: item.timestamp,
+    image: item.image, // Include image for thumbnails
+  }));
+};
+
+// Restore a drawing from history
+const restoreFromHistory = (id: string) => {
+  const item = history.find(h => h.id === id);
+  if (!item) {
+    console.error(`History item ${id} not found`);
+    return false;
+  }
+
+  try {
+    // Decode base64 PNG and draw to canvas using napi-rs Image
+    const imgBuffer = Buffer.from(item.image, "base64");
+    const img = new Image();
+    img.src = imgBuffer;
+    ctx.drawImage(img, 0, 0);
+    throttledSave();
+    return true;
+  } catch (e) {
+    console.error("Failed to restore from history:", e);
+    return false;
+  }
+};
+
 const throttledSave = () => {
   const now = Date.now();
 
@@ -197,7 +301,15 @@ const throttledSave = () => {
   }
 };
 
-const handleClear = () => {
+const handleClear = async () => {
+  try {
+    // Save current state to history before clearing
+    await saveToHistory();
+  } catch (e) {
+    console.error("Error saving to history during clear:", e);
+    // Continue with clear even if history save fails
+  }
+  
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   throttledSave();
@@ -259,38 +371,73 @@ const server = Bun.serve({
       );
     },
     message(ws, message) {
-      const data = JSON.parse(message.toString()) as CanvasAction;
+      try {
+        const data = JSON.parse(message.toString()) as CanvasAction;
 
-      // Update server-side canvas
-      switch (data.type) {
-        case "draw":
-          if (
-            !Object.values(colors).includes(data.color) ||
-            !Object.values(brushSizes).includes(data.brushSize)
-          )
-            return;
-          draw(brush, data.points, data.color, data.brushSize);
-          throttledSave();
-          break;
-        case "fill":
-          if (!Object.values(colors).includes(data.color)) return;
-          fill(
-            ctx as unknown as CanvasRenderingContext2D,
-            CANVAS_WIDTH,
-            CANVAS_HEIGHT,
-            data.x,
-            data.y,
-            data.color
-          );
-          throttledSave();
-          break;
-        case "clear":
-          handleClear();
-          break;
+        // Update server-side canvas
+        switch (data.type) {
+          case "draw":
+            if (
+              !Object.values(colors).includes(data.color) ||
+              !Object.values(brushSizes).includes(data.brushSize)
+            )
+              return;
+            draw(brush, data.points, data.color, data.brushSize);
+            throttledSave();
+            break;
+          case "fill":
+            if (!Object.values(colors).includes(data.color)) return;
+            fill(
+              ctx as unknown as CanvasRenderingContext2D,
+              CANVAS_WIDTH,
+              CANVAS_HEIGHT,
+              data.x,
+              data.y,
+              data.color
+            );
+            throttledSave();
+            break;
+          case "clear":
+            // Handle async function without blocking
+            handleClear().catch(err => {
+              console.error("Error in handleClear:", err);
+            });
+            break;
+          case "get-history":
+            // Send history to requesting client
+            ws.send(
+              JSON.stringify({
+                type: "history-update",
+                history: getHistoryList(),
+              })
+            );
+            return; // Don't broadcast this
+          case "restore": {
+            // Restore a drawing from history
+            const restored = restoreFromHistory(data.id);
+            if (restored) {
+              // Broadcast the restored state to all clients
+              setTimeout(() => {
+                const pngBuffer = canvas.toBuffer("image/png");
+                server.publish(
+                  "drawing",
+                  JSON.stringify({
+                    type: "init",
+                    image: pngBuffer.toString("base64"),
+                  })
+                );
+              }, 100);
+            }
+            return; // Don't broadcast the restore action itself
+          }
+        }
+
+        // Broadcast to all clients
+        ws.publish("drawing", message);
+      } catch (error) {
+        console.error("Error handling WebSocket message:", error);
+        // Don't crash the server, just log the error
       }
-
-      // Broadcast to all clients
-      ws.publish("drawing", message);
     },
     close(ws) {
       ws.unsubscribe("drawing");
