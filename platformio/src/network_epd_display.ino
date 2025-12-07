@@ -10,10 +10,20 @@
 #include "EPD.h"
 #include "GUI_Paint.h"
 
-// Network configuration
-const char* ssid = "Tommy";
-const char* password = "N13uwsg13r1g!";
-const char* host = "guidoevertzen.nl";
+struct WiFiNetwork {
+  const char* ssid;
+  const char* password;
+};
+
+WiFiNetwork wifiNetworks[] = {
+  {"Tommy", "N13uwsg13r1g!"},
+  {"TheGooseIsLoose", "pcM*KMHjpLzimqo@Y49-"},
+};
+
+const int numNetworks = sizeof(wifiNetworks) / sizeof(wifiNetworks[0]);
+int currentNetworkIndex = 0;
+
+const char* host = "krabbelen.site";
 const char* imagePath = "/drawing.bmp";
 
 // Display configuration
@@ -25,13 +35,20 @@ const char* imagePath = "/drawing.bmp";
 
 // Global variables for 3-color display
 UBYTE* blackBuffer = NULL;  // Buffer for black pixels
-UBYTE* redBuffer = NULL;    // Buffer for red pixels  
+UBYTE* redBuffer = NULL;    // Buffer for red pixels
+// Change detection using pixel counts (simple and memory efficient)
+int prevBlackPixels = -1;
+int prevWhitePixels = -1;
+int prevRedPixels = -1;
+int currentBlackPixels = 0;
+int currentWhitePixels = 0;
+int currentRedPixels = 0;
 WiFiClient client;
 HTTPClient http;
 int errorCount = 0;
 unsigned long lastRefresh = 0;
 const unsigned long REFRESH_INTERVAL = 60000; // 1 minute for testing (change back to 180000 for production)
-bool firstImageLoad = true;  // Simple change detection
+bool isFirstDisplay = true;  // Track if this is the very first display
 
 void setup() {
   Serial.begin(115200);
@@ -44,7 +61,7 @@ void setup() {
   EPD_7IN5B_V2_Clear();
   delay(2000);  // Increased delay for proper initialization
   
-  // Allocate buffers for 3-color display
+  // Allocate buffers for 3-color display (only 2 buffers now to save memory)
   blackBuffer = (UBYTE*)malloc(IMAGE_SIZE);
   if (blackBuffer == NULL) {
     Serial.println("Failed to allocate black buffer");
@@ -63,7 +80,7 @@ void setup() {
   
   // Print memory usage
   Serial.printf("Buffer size: %d bytes each\n", IMAGE_SIZE);
-  Serial.printf("Total allocated: %d bytes\n", IMAGE_SIZE * 2);
+  Serial.printf("Total allocated: %d bytes (2 buffers)\n", IMAGE_SIZE * 2);
   Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
   
   // Initialize Paint library with black buffer
@@ -105,32 +122,62 @@ void loop() {
 }
 
 void connectToWiFi() {
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(1000);
-    Serial.print(".");
-    attempts++;
+  // Try each network in sequence
+  for (int networkIndex = 0; networkIndex < numNetworks; networkIndex++) {
+    Serial.printf("Attempting to connect to network %d: %s\n", networkIndex + 1, wifiNetworks[networkIndex].ssid);
+    
+    WiFi.begin(wifiNetworks[networkIndex].ssid, wifiNetworks[networkIndex].password);
+    Serial.print("Connecting");
+    
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 15) {  // Reduced attempts per network
+      delay(1000);
+      Serial.print(".");
+      attempts++;
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("");
+      Serial.printf("WiFi connected to: %s\n", wifiNetworks[networkIndex].ssid);
+      Serial.print("IP address: ");
+      Serial.println(WiFi.localIP());
+      currentNetworkIndex = networkIndex;  // Remember which network worked
+      return;  // Successfully connected
+    } else {
+      Serial.printf("\nFailed to connect to %s\n", wifiNetworks[networkIndex].ssid);
+      WiFi.disconnect();  // Clean disconnect before trying next network
+      delay(1000);
+    }
   }
   
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("");
-    Serial.println("WiFi connected!");
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
-  } else {
-    Serial.println("");
-    Serial.println("WiFi connection failed!");
-    errorCount++;
-  }
+  // If we get here, no networks worked
+  Serial.println("All WiFi networks failed!");
+  errorCount++;
 }
 
 bool fetchAndDisplayImage() {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi not connected, attempting reconnection...");
-    connectToWiFi();
+    
+    // First try to reconnect to the last working network
+    if (currentNetworkIndex < numNetworks) {
+      Serial.printf("Trying to reconnect to last working network: %s\n", wifiNetworks[currentNetworkIndex].ssid);
+      WiFi.begin(wifiNetworks[currentNetworkIndex].ssid, wifiNetworks[currentNetworkIndex].password);
+      
+      int quickAttempts = 0;
+      while (WiFi.status() != WL_CONNECTED && quickAttempts < 10) {
+        delay(1000);
+        Serial.print(".");
+        quickAttempts++;
+      }
+    }
+    
+    // If that didn't work, try all networks
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("\nQuick reconnect failed, trying all networks...");
+      connectToWiFi();
+    }
+    
     if (WiFi.status() != WL_CONNECTED) {
       return false;
     }
@@ -149,31 +196,35 @@ bool fetchAndDisplayImage() {
   if (httpCode == HTTP_CODE_OK) {
     WiFiClient* stream = http.getStreamPtr();
     if (processBMPStream(stream)) {
-      // Only update display if image changed
+      // Check if image actually changed
       if (hasImageChanged()) {
         Serial.println("Image changed, updating display...");
         
-        // Use fast init for subsequent displays (after first one)
-        static bool firstDisplay = true;
-        if (!firstDisplay) {
-          EPD_7IN5B_V2_Init_Fast();
+        // Use full init on first display, fast init afterwards
+        if (isFirstDisplay) {
+          EPD_7IN5B_V2_Init();
+          isFirstDisplay = false;
         } else {
-          firstDisplay = false;
+          EPD_7IN5B_V2_Init_Fast();
         }
         
-        EPD_7IN5B_V2_Display(blackBuffer, redBuffer);  // 3-color display takes both buffers
-        delay(2000);  // Wait for display to complete (same as demo)
+        EPD_7IN5B_V2_Display(blackBuffer, redBuffer);
+        delay(2000);  // Wait for display to complete
         
-        // Mark that we've loaded the first image
-        firstImageLoad = false;
-        Serial.println("Display updated - waiting for next refresh interval");
-        http.end();
-        return true;
+        Serial.println("Display updated successfully");
       } else {
-        Serial.println("No image changes detected");
-        http.end();
-        return true;
+        Serial.println("Image unchanged, skipping display update to save e-paper wear");
       }
+      
+      // Save pixel counts for next comparison
+      prevBlackPixels = currentBlackPixels;
+      prevWhitePixels = currentWhitePixels;
+      prevRedPixels = currentRedPixels;
+      Serial.printf("Saved pixel counts - Black: %d, White: %d, Red: %d\n", 
+                    prevBlackPixels, prevWhitePixels, prevRedPixels);
+      
+      http.end();
+      return true;
     }
   } else {
     Serial.printf("HTTP request failed: %d\n", httpCode);
@@ -237,7 +288,10 @@ bool processBMPStream(WiFiClient* stream) {
   uint8_t rowBuffer[bytesPerRow];
   
   Serial.printf("Processing BMP: %dx%d, %d bytes per row\n", DISPLAY_WIDTH, DISPLAY_HEIGHT, bytesPerRow);
-  int blackPixels = 0, whitePixels = 0;
+  // Reset pixel counters for this image
+  currentBlackPixels = 0;
+  currentWhitePixels = 0;
+  currentRedPixels = 0;
   
   for (int row = 0; row < DISPLAY_HEIGHT; row++) {
     // Add small delay to prevent overwhelming the stream
@@ -266,11 +320,6 @@ bool processBMPStream(WiFiClient* stream) {
         // Extract 2-bit pixel value
         uint8_t pixelValue = (byte >> (6 - pixelInByte * 2)) & 0x03;
         
-        // Debug first few pixels to see what values we're getting
-        if (row < 2 && x < 10) {
-          Serial.printf("Pixel [%d,%d]: byte=0x%02X, pixelValue=%d\n", x, y, byte, pixelValue);
-        }
-        
         // Map 2-bit values to 3-color display:
         // 0 = white (background)
         // 1 = black  
@@ -281,16 +330,17 @@ bool processBMPStream(WiFiClient* stream) {
         Paint_SelectImage(blackBuffer);
         if (pixelValue == 1 || pixelValue == 3) {
           Paint_DrawPoint(x, y, BLACK, DOT_PIXEL_1X1, DOT_STYLE_DFT);
-          blackPixels++;
+          currentBlackPixels++;
         } else {
           Paint_DrawPoint(x, y, WHITE, DOT_PIXEL_1X1, DOT_STYLE_DFT);
-          whitePixels++;
+          currentWhitePixels++;
         }
         
         // Draw to red buffer  
         Paint_SelectImage(redBuffer);
         if (pixelValue == 2) {
           Paint_DrawPoint(x, y, BLACK, DOT_PIXEL_1X1, DOT_STYLE_DFT);  // RED pixels are BLACK in red buffer
+          currentRedPixels++;
         } else {
           Paint_DrawPoint(x, y, WHITE, DOT_PIXEL_1X1, DOT_STYLE_DFT);  // Non-red pixels are WHITE in red buffer
         }
@@ -298,16 +348,36 @@ bool processBMPStream(WiFiClient* stream) {
     }
   }
   
-  Serial.printf("BMP processing complete: %d black pixels, %d white pixels\n", blackPixels, whitePixels);
+  Serial.printf("BMP processing complete: %d black pixels, %d white pixels, %d red pixels\n", 
+                currentBlackPixels, currentWhitePixels, currentRedPixels);
   return true;
 }
 
 bool hasImageChanged() {
-  // Only update on first load, then wait for refresh interval
-  if (firstImageLoad) {
+  // On first display, always return true
+  if (isFirstDisplay) {
+    Serial.println("First display - will update");
     return true;
   }
-  return false;  // Don't update again until next refresh interval
+  
+  // Debug output
+  Serial.printf("Current pixel counts - Black: %d, White: %d, Red: %d\n", 
+                currentBlackPixels, currentWhitePixels, currentRedPixels);
+  Serial.printf("Previous pixel counts - Black: %d, White: %d, Red: %d\n", 
+                prevBlackPixels, prevWhitePixels, prevRedPixels);
+  
+  // Compare pixel counts
+  bool changed = (currentBlackPixels != prevBlackPixels) || 
+                 (currentWhitePixels != prevWhitePixels) || 
+                 (currentRedPixels != prevRedPixels);
+  
+  if (changed) {
+    Serial.println("Change detected in pixel counts");
+    return true;
+  } else {
+    Serial.println("No change detected - identical pixel counts");
+    return false;
+  }
 }
 
 void shutdownDisplay() {
