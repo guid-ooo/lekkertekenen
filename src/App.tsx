@@ -336,7 +336,7 @@ const DrawingApp = () => {
 
   return (
     <div className="mx-auto flex flex-col items-center p-2 sm:p-3 md:p-4 max-w-full h-screen overflow-hidden">
-      <div className="flex gap-4 mb-2 md:mb-4 items-center w-full flex-wrap max-w-screen-2xl">
+      <div className="flex gap-4 mb-2 md:mb-4 items-center w-full flex-wrap">
         <h1 className="text-2xl font-bold text-slate-900">
           🧑‍🎨 {"Lekker Krabbelen"}
         </h1>
