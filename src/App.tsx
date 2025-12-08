@@ -337,7 +337,7 @@ const DrawingApp = () => {
   return (
     <div className="mx-auto flex flex-col items-center p-2 sm:p-3 md:p-4 max-w-full h-screen overflow-hidden">
       <div className="flex gap-4 mb-2 md:mb-4 items-center w-full flex-wrap">
-        <h1 className="text-2xl font-bold text-slate-900">
+        <h1 className="hidden md:block font-bold text-slate-900">
           🧑‍🎨 {"Lekker Krabbelen"}
         </h1>
         <div className="flex gap-4 items-center flex-wrap justify-end flex-grow">
@@ -407,7 +407,7 @@ const DrawingApp = () => {
         </div>
       </div>
       
-          <div className="w-full h-full grid grid-cols-1 grid-rows-1 items-center justify-items-center">
+          <div className="w-full h-full flex items-center justify-center max-h-[80vh]"  style={{ aspectRatio: "800 / 480"}}>
               <canvas
                 ref={canvasRef}
                 width={800}
