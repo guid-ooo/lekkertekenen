@@ -46,6 +46,15 @@ interface DeleteHistoryAction {
   id: string;
 }
 
+export interface User {
+  id: string;
+}
+
+interface PresenceUpdateAction {
+  type: "presence-update";
+  users: User[];
+}
+
 export type CanvasAction = 
   | InitAction 
   | DrawAction 
@@ -54,4 +63,5 @@ export type CanvasAction =
   | GetHistoryAction 
   | HistoryUpdateAction 
   | RestoreAction
-  | DeleteHistoryAction;
+  | DeleteHistoryAction
+  | PresenceUpdateAction;

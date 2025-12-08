@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PaintBucket, Download, History, X } from "lucide-react";
+import { PaintBucket, Download, History, X, Trash, Trash2, PaintRoller, ImagePlus, User as UserIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import HistoryPanel from "@/components/HistoryPanel";
 import PxBrush from "../shared/PxBrush";
-import { CanvasAction, HistoryItem } from "../shared/Actions";
+import { CanvasAction, HistoryItem, User } from "../shared/Actions";
 import { fill, draw, colors, brushSizes } from "../shared/Utilities";
 
 const DrawingApp = () => {
@@ -22,6 +22,7 @@ const DrawingApp = () => {
   const [isDisconnected, setIsDisconnected] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showHistoryMobile, setShowHistoryMobile] = useState(false);
+  const [connectedUsers, setConnectedUsers] = useState<User[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const wsRef = useRef<WebSocket>(null);
@@ -320,6 +321,9 @@ const DrawingApp = () => {
       case "history-update":
         setHistory(data.history);
         break;
+      case "presence-update":
+        setConnectedUsers(data.users);
+        break;
     }
   };
 
@@ -389,25 +393,31 @@ const DrawingApp = () => {
           </div>
 
           <div className="flex gap-2">
+            {connectedUsers.length >= 2 && (
+              <Button variant="outline" className="pointer-events-none">
+                <UserIcon size={16} />
+                {connectedUsers.length}
+              </Button>
+            )}
+            <Button variant="outline" onClick={downloadCanvas}>
+              <Download size={16} />
+            </Button>
             <Button 
               variant="outline" 
               onClick={() => setShowHistoryMobile(!showHistoryMobile)}
             >
               <History size={16} className="mr-1" />
-              <span className="hidden lg:inline">History ({history.length})</span>
-            </Button>
-            <Button variant="outline" onClick={downloadCanvas}>
-              <Download size={16} className="mr-1" />
-              <span className="hidden lg:inline">Download</span>
+              <span className="hidden lg:inline">Geschiedenis ({history.length})</span>
             </Button>
             <Button variant="outline" onClick={handleClear}>
-              Clear
+              <ImagePlus size={16} className="mr-1" />
+              <span className="hidden lg:inline">Nieuw canvas</span>
             </Button>
           </div>
         </div>
       </div>
       
-          <div className="w-full h-full flex items-center justify-center max-h-[80dvh] p-4" style={{ aspectRatio: "800 / 480"}}>
+          <div className="w-full h-full flex items-center justify-center max-h-[80dvh] p-4 relative" style={{ aspectRatio: "800 / 480"}}>
               <canvas
                 ref={canvasRef}
                 width={800}
@@ -485,10 +495,9 @@ const DrawingApp = () => {
       <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Clear Canvas?</DialogTitle>
+            <DialogTitle>Nieuw canvas maken?</DialogTitle>
             <DialogDescription>
-              Are you sure you want to clear the entire canvas? This action
-              cannot be undone.
+             De huidige tekening komt in de geschiedenis te staan.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -496,10 +505,10 @@ const DrawingApp = () => {
               variant="outline"
               onClick={() => setShowClearConfirm(false)}
             >
-              Cancel
+              Annuleren
             </Button>
             <Button variant="destructive" onClick={confirmClear}>
-              Clear Canvas
+              Bevestigen
             </Button>
           </DialogFooter>
         </DialogContent>

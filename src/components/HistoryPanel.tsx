@@ -17,10 +17,10 @@ const HistoryPanel = ({ history, onRestore, onDelete }: HistoryPanelProps) => {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return "just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffMins < 1) return "net";
+    if (diffMins < 60) return `${diffMins}m geleden`;
+    if (diffHours < 24) return `${diffHours}u geleden`;
+    if (diffDays < 7) return `${diffDays}d geleden`;
     
     return date.toLocaleDateString();
   };
@@ -73,15 +73,15 @@ const HistoryPanel = ({ history, onRestore, onDelete }: HistoryPanelProps) => {
     <Card className="p-4 bg-slate-50 flex flex-col self-stretch h-full">
       <h2 className="text-lg font-semibold mb-3 text-slate-900 flex items-center gap-2 flex-shrink-0">
         <Clock size={20} />
-        History ({history.length})
+        Geschiedenis ({history.length})
       </h2>
       <div className="space-y-2 flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
         {history.map((item) => (
           <div
             key={item.id}
-            className="relative group"
+            className="relative group hover:cursor-pointer"
           >
-            <button
+            <div
               onClick={() => onRestore(item.id)}
               className="w-full text-left transition-all active:scale-[0.98]"
             >
@@ -115,7 +115,7 @@ const HistoryPanel = ({ history, onRestore, onDelete }: HistoryPanelProps) => {
                   </div>
                 </div>
               </Card>
-            </button>
+            </div>
           </div>
         ))}
       </div>

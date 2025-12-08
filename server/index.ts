@@ -1,7 +1,7 @@
 import { createCanvas, Canvas, SKRSContext2D, loadImage } from "@napi-rs/canvas";
 import PxBrush from "../shared/PxBrush";
 import { CronJob } from "cron";
-import { CanvasAction, HistoryItem } from "../shared/Actions";
+import { CanvasAction, HistoryItem, User } from "../shared/Actions";
 import { brushSizes, colors, draw, fill } from "../shared/Utilities";
 
 // Server-side canvas
@@ -20,6 +20,9 @@ const MAX_HISTORY = 10;
 
 // History storage
 let history: HistoryItem[] = [];
+
+// Connected users tracking
+const connectedUsers = new Map<any, User>();
 
 const initialize = async () => {
   // Initialize canvas and ensure drawings directory exists
@@ -399,6 +402,13 @@ const server = Bun.serve({
     open(ws) {
       ws.subscribe("drawing");
 
+      // Assign user a unique ID
+      const userId = crypto.randomUUID();
+      const user: User = { id: userId };
+      connectedUsers.set(ws, user);
+
+      console.log(`User ${userId} connected`);
+
       // Send initial state to new client
       const pngBuffer = canvas.toBuffer("image/png");
       ws.send(
@@ -407,6 +417,14 @@ const server = Bun.serve({
           image: pngBuffer.toString("base64"),
         })
       );
+
+      // Broadcast updated presence to all clients
+      const presenceUpdate = JSON.stringify({
+        type: "presence-update",
+        users: Array.from(connectedUsers.values()),
+      });
+      server.publish("drawing", presenceUpdate);
+      ws.send(presenceUpdate);
     },
     message(ws, message) {
       try {
@@ -516,6 +534,19 @@ const server = Bun.serve({
     },
     close(ws) {
       ws.unsubscribe("drawing");
+      
+      // Remove user from connected users
+      const user = connectedUsers.get(ws);
+      if (user) {
+        console.log(`User ${user.id} disconnected`);
+        connectedUsers.delete(ws);
+        
+        // Broadcast updated presence to remaining clients
+        server.publish("drawing", JSON.stringify({
+          type: "presence-update",
+          users: Array.from(connectedUsers.values()),
+        }));
+      }
     },
   },
 });
