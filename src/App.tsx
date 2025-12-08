@@ -392,10 +392,9 @@ const DrawingApp = () => {
             <Button 
               variant="outline" 
               onClick={() => setShowHistoryMobile(!showHistoryMobile)}
-              className="lg:hidden"
             >
               <History size={16} className="mr-1" />
-              History ({history.length})
+              <span className="hidden lg:inline">History ({history.length})</span>
             </Button>
             <Button variant="outline" onClick={downloadCanvas}>
               <Download size={16} className="mr-1" />
@@ -408,14 +407,16 @@ const DrawingApp = () => {
         </div>
       </div>
       
-      <div className="flex flex-col lg:flex-row flex-1 min-h-0 items-center lg:items-start 2xl:items-center 2xl:items-stretch justify-center gap-4 w-full h-full max-h-full">
-          <Card className="p-3 sm:p-5 md:p-7 flex-col bg-slate-400 flex shrink lg:w-full h-auto max-w-full max-h-full" style={{ aspectRatio: "1022/733" }}>
-            <canvas
-              ref={canvasRef}
-              width={800}
-              height={480}
-              style={{ imageRendering: "pixelated" }}
-              className="cursor-crosshair max-w-full touch-pinch-zoom w-full flex-1"
+          <div className="w-full h-full grid grid-cols-1 grid-rows-1 items-center justify-items-center">
+              <canvas
+                ref={canvasRef}
+                width={800}
+                height={480}
+                style={{ 
+                  imageRendering: "pixelated", 
+                  aspectRatio: "800 / 480"
+                }}
+                className="cursor-crosshair touch-pinch-zoom max-h-full max-w-full h-auto w-auto object-contain border-[1rem] border-slate-400 rounded-xl"
               onMouseDown={(e) => {
                 if (tool === "fill") {
                   handleFill(e);
@@ -437,23 +438,11 @@ const DrawingApp = () => {
               onTouchEnd={endDrawing}
               onTouchCancel={endDrawing}
             />
-            <div className="flex justify-center pt-5 pb-1 sm:py-[1.5rem] md:pb-0 h-10 lg:h-12">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                height="100%"
-                fillRule="evenodd"
-                viewBox="0 0 27 8.31"
-              >
-                <g fillOpacity=".2">
-                  <path d="M5.1 4.82v.04c-.01.03 0 .08.02.16.02.07.09.18.2.32.12.15.35.34.67.6s.82.53 1.46.85a14.4 14.4 0 0 0 7.4 1.48A12.93 12.93 0 0 0 21.17 6c.43-.32.73-.6.9-.84s.18-.42.07-.53c-.12-.1-.37-.15-.75-.13-.39.01-.89.07-1.5.16-.61.1-1.31.19-2.1.29a33.82 33.82 0 0 1-5.18.23c-.9-.04-1.77-.1-2.6-.2s-1.58-.2-2.26-.29c-.67-.1-1.2-.15-1.55-.18a2.88 2.88 0 0 0-.76.01c-.14.03-.23.08-.27.12s-.06.1-.06.12l-.01.05M0 1.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0zM24 1.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0z" />
-                </g>
-              </svg>
-            </div>
-          </Card>
+          </div>
         
-        {/* Desktop: side panel, Mobile: overlay */}
+        {/* History Panel Overlay */}
         <div className={`
-          fixed inset-0 z-50 bg-black/50 lg:hidden
+          fixed inset-0 z-50 bg-black/50
           ${showHistoryMobile ? 'block' : 'hidden'}
         `} onClick={() => setShowHistoryMobile(false)}>
           <div 
@@ -469,12 +458,6 @@ const DrawingApp = () => {
             <HistoryPanel history={history} onRestore={restoreDrawing} onDelete={deleteHistoryItem} />
           </div>
         </div>
-        
-        {/* Desktop only */}
-        <div className="hidden lg:flex w-full lg:w-80 flex-none flex-col h-full bg-slate-50 rounded-xl overflow-hidden border border-slate-200">
-          <HistoryPanel history={history} onRestore={restoreDrawing} onDelete={deleteHistoryItem} />
-        </div>
-      </div>
 
       <Dialog
         open={isDisconnected}
