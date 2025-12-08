@@ -337,7 +337,7 @@ const DrawingApp = () => {
   return (
     <div className="mx-auto flex flex-col items-center p-2 sm:p-3 md:p-4 max-w-full h-screen overflow-hidden">
       <div className="flex gap-4 mb-2 md:mb-4 items-center w-full flex-wrap">
-        <h1 className="hidden md:block font-bold text-slate-900">
+        <h1 className="hidden md:block text-2xl font-bold text-slate-900">
           🧑‍🎨 {"Lekker Krabbelen"}
         </h1>
         <div className="flex gap-4 items-center flex-wrap justify-end flex-grow">
@@ -416,7 +416,7 @@ const DrawingApp = () => {
                   imageRendering: "pixelated", 
                   aspectRatio: "800 / 480"
                 }}
-                className="cursor-crosshair touch-pinch-zoom max-h-full max-w-full h-auto w-auto object-contain border-[1rem] border-slate-400 rounded-xl"
+                className="cursor-crosshair touch-pinch-zoom max-h-full max-w-full h-auto w-auto object-contain outline-[1rem] outline outline-slate-400  rounded-xl"
               onMouseDown={(e) => {
                 if (tool === "fill") {
                   handleFill(e);
