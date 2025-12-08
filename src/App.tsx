@@ -407,7 +407,7 @@ const DrawingApp = () => {
         </div>
       </div>
       
-          <div className="w-full h-full flex items-center justify-center max-h-[80vh]"  style={{ aspectRatio: "800 / 480"}}>
+          <div className="w-full h-full flex items-center justify-center max-h-[80dvh]"  style={{ aspectRatio: "800 / 480"}}>
               <canvas
                 ref={canvasRef}
                 width={800}
