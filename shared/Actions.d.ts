@@ -1,6 +1,7 @@
 interface InitAction {
   type: "init";
   image: string;
+  historyId?: string; // Optional ID when restoring from history
 }
 
 export interface DrawAction {
@@ -46,6 +47,11 @@ interface DeleteHistoryAction {
   id: string;
 }
 
+interface SaveToHistoryAction {
+  type: "save-to-history";
+  id?: string; // If provided, update existing; otherwise create new
+}
+
 export interface User {
   id: string;
 }
@@ -64,4 +70,5 @@ export type CanvasAction =
   | HistoryUpdateAction 
   | RestoreAction
   | DeleteHistoryAction
+  | SaveToHistoryAction
   | PresenceUpdateAction;

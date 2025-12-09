@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PaintBucket, Download, History, X, Trash, Trash2, PaintRoller, ImagePlus, User as UserIcon } from "lucide-react";
+import { PaintBucket, Download, History, X, Trash, Trash2, PaintRoller, ImagePlus, User as UserIcon, Save } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,7 @@ const DrawingApp = () => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showHistoryMobile, setShowHistoryMobile] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState<User[]>([]);
+  const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const wsRef = useRef<WebSocket>(null);
@@ -133,6 +134,7 @@ const DrawingApp = () => {
     sendUpdate({
       type: "clear",
     });
+    setCurrentHistoryId(null); // Reset history tracking on clear
     setShowClearConfirm(false);
   };
 
@@ -155,6 +157,14 @@ const DrawingApp = () => {
   const deleteHistoryItem = (id: string) => {
     console.log("Deleting history item with id:", id);
     sendUpdate({ type: "delete-history", id });
+  };
+
+  const saveToHistory = () => {
+    console.log("Saving to history, current ID:", currentHistoryId);
+    sendUpdate({ 
+      type: "save-to-history", 
+      id: currentHistoryId || undefined 
+    });
   };
 
   const downloadCanvas = () => {
@@ -306,6 +316,10 @@ const DrawingApp = () => {
           }
         };
         img.src = `data:image/png;base64,${data.image}`;
+        // Set the history ID if provided (from restore)
+        if (data.historyId) {
+          setCurrentHistoryId(data.historyId);
+        }
         break;
       }
       case "draw": {
@@ -399,8 +413,11 @@ const DrawingApp = () => {
                 {connectedUsers.length}
               </Button>
             )}
-            <Button variant="outline" onClick={downloadCanvas}>
+            <Button variant="outline" onClick={downloadCanvas} title="Download">
               <Download size={16} />
+            </Button>
+            <Button variant="outline" onClick={saveToHistory} title="Save to history">
+              <Save size={16} />
             </Button>
             <Button 
               variant="outline" 

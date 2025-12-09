@@ -254,6 +254,56 @@ const saveToHistory = async () => {
   }
 };
 
+// Save or update a specific history item
+const saveOrUpdateHistory = async (id?: string) => {
+  try {
+    const pngBuffer = canvas.toBuffer("image/png");
+    
+    if (id) {
+      // Update existing item
+      const index = history.findIndex(h => h.id === id);
+      if (index !== -1) {
+        history[index] = {
+          ...history[index],
+          timestamp: Date.now(),
+          image: pngBuffer.toString("base64"),
+        };
+        console.log(`Updated history item ${id}`);
+      } else {
+        // ID not found, create new
+        const historyItem: HistoryItem = {
+          id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+          timestamp: Date.now(),
+          image: pngBuffer.toString("base64"),
+        };
+        history.unshift(historyItem);
+        console.log(`Created new history item (ID ${id} not found)`);
+      }
+    } else {
+      // Create new item
+      const historyItem: HistoryItem = {
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+        timestamp: Date.now(),
+        image: pngBuffer.toString("base64"),
+      };
+      history.unshift(historyItem);
+      console.log(`Created new history item`);
+    }
+
+    // Keep only last MAX_HISTORY items
+    if (history.length > MAX_HISTORY) {
+      history = history.slice(0, MAX_HISTORY);
+    }
+
+    // Save to disk
+    await saveHistoryToDisk();
+    return true;
+  } catch (e) {
+    console.error("Failed to save/update history:", e);
+    return false;
+  }
+};
+
 // Get history list (without full image data for efficiency)
 const getHistoryList = () => {
   return history.map(item => ({
@@ -480,6 +530,7 @@ const server = Bun.serve({
                 const initMessage = JSON.stringify({
                   type: "init",
                   image: pngBuffer.toString("base64"),
+                  historyId: data.id, // Include the history ID
                 });
                 
                 // Send to requesting client
@@ -522,6 +573,31 @@ const server = Bun.serve({
             });
             
             return; // Don't broadcast the delete action itself
+          }
+          case "save-to-history": {
+            // Save or update history item
+            console.log("Received save-to-history request, id:", data.id);
+            
+            saveOrUpdateHistory(data.id).then((success) => {
+              if (success) {
+                // Send updated history to all clients
+                const historyUpdate = JSON.stringify({
+                  type: "history-update",
+                  history: getHistoryList(),
+                });
+                
+                server.publish("drawing", historyUpdate);
+                ws.send(historyUpdate);
+                
+                console.log("Broadcasted updated history after save");
+              } else {
+                console.error("Failed to save to history");
+              }
+            }).catch((err) => {
+              console.error("Error in save-to-history promise:", err);
+            });
+            
+            return; // Don't broadcast the save action itself
           }
         }
 
