@@ -52,6 +52,10 @@ interface SaveToHistoryAction {
   id?: string; // If provided, update existing; otherwise create new
 }
 
+interface WaveAction {
+  type: "wave";
+}
+
 export interface User {
   id: string;
 }
@@ -71,4 +75,5 @@ export type CanvasAction =
   | RestoreAction
   | DeleteHistoryAction
   | SaveToHistoryAction
-  | PresenceUpdateAction;
+  | PresenceUpdateAction
+  | WaveAction;

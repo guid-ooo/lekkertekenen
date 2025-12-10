@@ -24,6 +24,7 @@ const DrawingApp = () => {
   const [showHistoryMobile, setShowHistoryMobile] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState<User[]>([]);
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
+  const [showWaveConfetti, setShowWaveConfetti] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const wsRef = useRef<WebSocket>(null);
@@ -165,6 +166,14 @@ const DrawingApp = () => {
       type: "save-to-history", 
       id: currentHistoryId || undefined 
     });
+  };
+
+  const triggerWave = () => {
+    // Send wave to server to broadcast to all users
+    sendUpdate({ type: "wave" });
+    // Show locally
+    setShowWaveConfetti(true);
+    setTimeout(() => setShowWaveConfetti(false), 3000);
   };
 
   const downloadCanvas = () => {
@@ -338,6 +347,11 @@ const DrawingApp = () => {
       case "presence-update":
         setConnectedUsers(data.users);
         break;
+      case "wave":
+        // Another user waved - show confetti
+        setShowWaveConfetti(true);
+        setTimeout(() => setShowWaveConfetti(false), 3000);
+        break;
     }
   };
 
@@ -408,8 +422,8 @@ const DrawingApp = () => {
 
           <div className="flex gap-2">
             {connectedUsers.length >= 2 && (
-              <Button variant="outline" className="pointer-events-none">
-                <UserIcon size={16} />
+              <Button variant="outline" onClick={triggerWave}>
+                <UserIcon size={16} className="mr-1" />
                 {connectedUsers.length}
               </Button>
             )}
@@ -530,6 +544,27 @@ const DrawingApp = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Wave Confetti */}
+      {showWaveConfetti && (
+        <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
+          {Array.from({ length: 50 }).map((_, i) => (
+            <div
+              key={i}
+              className="absolute animate-fall"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `-${Math.random() * 20}%`,
+                fontSize: `${20 + Math.random() * 30}px`,
+                animationDelay: `${Math.random() * 0.5}s`,
+                animationDuration: `${2 + Math.random() * 2}s`,
+              }}
+            >
+              👋
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
