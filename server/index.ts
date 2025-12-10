@@ -16,7 +16,7 @@ const CANVAS_HEIGHT = 480;
 const SAVE_THROTTLE = 5000;
 const SAVE_PATH = "./drawings/current.bmp";
 const HISTORY_PATH = "./drawings/history.json";
-const MAX_HISTORY = 10;
+const MAX_HISTORY = 25;
 
 // History storage
 let history: HistoryItem[] = [];
@@ -599,6 +599,9 @@ const server = Bun.serve({
             
             return; // Don't broadcast the save action itself
           }
+          case "wave":
+            // Simply broadcast the wave to all clients
+            break;
         }
 
         // Broadcast to all clients

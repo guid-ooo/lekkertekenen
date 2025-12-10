@@ -74,19 +74,24 @@
     }
   }
 
-  /* Wave confetti animation */
-  @keyframes fall {
-    0% {
-      transform: translateY(0) rotate(0deg);
-      opacity: 1;
-    }
-    100% {
-      transform: translateY(100vh) rotate(360deg);
-      opacity: 0;
-    }
+  /* Waving hand animation */
+  .wave {
+    animation-name: wave-animation;
+    animation-duration: 2.5s;
+    animation-iteration-count: 1;
+    animation-fill-mode: forwards;
+    transform-origin: 70% 70%;
+    display: inline-block;
   }
 
-  .animate-fall {
-    animation: fall linear forwards;
+  @keyframes wave-animation {
+    0% { transform: rotate(0.0deg) scale(0%) }
+    10% { transform: rotate(14.0deg) scale(100%) }
+    20% { transform: rotate(-8.0deg) }
+    30% { transform: rotate(14.0deg) }
+    40% { transform: rotate(-4.0deg) }
+    50% { transform: rotate(10.0deg) }
+    60% { transform: rotate(0.0deg) scale(100%); opacity: 1;}
+    100% { transform: rotate(0.0deg) scale(0%); opacity: 0; }
   }
 }
