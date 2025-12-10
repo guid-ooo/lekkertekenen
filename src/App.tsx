@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PaintBucket, Download, History, X, Trash, Trash2, PaintRoller, ImagePlus, User as UserIcon, Save } from "lucide-react";
+import { PaintBucket, Download, History, X, ImagePlus, User as UserIcon, Save } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,11 +14,11 @@ import PxBrush from "../shared/PxBrush";
 import { CanvasAction, HistoryItem, User } from "../shared/Actions";
 import { fill, draw, colors, brushSizes } from "../shared/Utilities";
 
-// Helper function to create a new wave object
-const createWave = (baseId: number = Date.now()) => ({
+const createWave = (baseId: number = Date.now(), isSent: boolean = false) => ({
   id: baseId + Math.random(),
-  offset: Math.random() * 60 - 30, // Random offset between -30px and +30px
-  scale: 1 - Math.random() * 0.4 // Random scale between 0.95 and 1.05
+  offset: Math.random() * 60 - 30,
+  scale: 1 - Math.random() * 0.4,
+  isSent
 });
 
 const DrawingApp = () => {
@@ -31,9 +30,8 @@ const DrawingApp = () => {
   const [showHistoryMobile, setShowHistoryMobile] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState<User[]>([]);
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
-  const [waves, setWaves] = useState<Array<{ id: number; offset: number; scale: number }>>([]);
+  const [waves, setWaves] = useState<Array<{ id: number; offset: number; scale: number; isSent: boolean }>>([]);
   const [isWaveDisabled, setIsWaveDisabled] = useState(false);
-  const [waveTimeoutEnd, setWaveTimeoutEnd] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const wsRef = useRef<WebSocket>(null);
@@ -42,7 +40,7 @@ const DrawingApp = () => {
   const disconnectTimeoutRef = useRef<Timer>(undefined);
   const reconnectTimeoutRef = useRef<Timer>(undefined);
   const reconnectAttemptsRef = useRef(0);
-  const wavePressesRef = useRef<number[]>([]); // Store timestamps of wave presses
+  const wavePressesRef = useRef<number[]>([]);
   const MAX_RECONNECT_ATTEMPTS = 5;
   const INITIAL_RECONNECT_DELAY = 1000;
 
@@ -61,7 +59,6 @@ const DrawingApp = () => {
 
     console.log("Connecting to WebSocket server...");
 
-    // Use environment variable for WebSocket URL if provided, otherwise use same host
     const wsUrl = import.meta.env.VITE_WS_URL 
       ? `${import.meta.env.VITE_WS_URL}/ws`
       : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
@@ -77,7 +74,6 @@ const DrawingApp = () => {
       setIsDisconnected(false);
       clearTimeout(reconnectTimeoutRef.current);
       
-      // Request history when connected
       setTimeout(() => {
         if (wsRef.current === ws) {
           requestHistory();
@@ -91,7 +87,6 @@ const DrawingApp = () => {
       wsRef.current = null;
       setIsDisconnected(true);
 
-      // Only attempt reconnection if we haven't exceeded max attempts
       if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
         const delay = INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttemptsRef.current);
         console.log(`Attempting to reconnect in ${delay}ms...`);
@@ -115,14 +110,11 @@ const DrawingApp = () => {
     const canvas = canvasRef.current!;
     brushRef.current = new PxBrush(canvas);
 
-    // Initialize canvas with white background
     clearCanvas();
 
-    // Create WebSocket connection
     const ws = connectWebSocket();
 
     return () => {
-      // Clear any pending reconnection attempts
       clearTimeout(reconnectTimeoutRef.current);
       ws.close();
       wsRef.current = null;
@@ -145,7 +137,7 @@ const DrawingApp = () => {
     sendUpdate({
       type: "clear",
     });
-    setCurrentHistoryId(null); // Reset history tracking on clear
+    setCurrentHistoryId(null);
     setShowClearConfirm(false);
   };
 
@@ -162,7 +154,7 @@ const DrawingApp = () => {
   const restoreDrawing = (id: string) => {
     console.log("Restoring drawing with id:", id);
     sendUpdate({ type: "restore", id });
-    setShowHistoryMobile(false); // Close mobile overlay after restore
+    setShowHistoryMobile(false);
   };
 
   const deleteHistoryItem = (id: string) => {
@@ -179,40 +171,29 @@ const DrawingApp = () => {
   };
 
   const triggerWave = () => {
-    // Check if currently in timeout
     if (isWaveDisabled) return;
 
     const now = Date.now();
     const oneMinuteAgo = now - 60000;
     
-    // Remove presses older than 1 minute
     wavePressesRef.current = wavePressesRef.current.filter(time => time > oneMinuteAgo);
-    
-    // Add current press
     wavePressesRef.current.push(now);
     
-    // Check if exceeded limit
     if (wavePressesRef.current.length > 20) {
       setIsWaveDisabled(true);
-      const timeoutEnd = now + 300000; // 5 minutes from now
-      setWaveTimeoutEnd(timeoutEnd);
       
-      // Re-enable after 5 minutes
       setTimeout(() => {
         setIsWaveDisabled(false);
-        setWaveTimeoutEnd(null);
         wavePressesRef.current = [];
       }, 300000);
       
       return;
     }
 
-    // Send wave to server to broadcast to all users
     sendUpdate({ type: "wave" });
-    // Add a new wave with random offset and scale
-    const newWave = createWave();
+    // Add a new wave with random offset and scale - mark as sent
+    const newWave = createWave(Date.now(), true);
     setWaves(prev => [...prev, newWave]);
-    // Remove this wave after 3 seconds
     setTimeout(() => {
       setWaves(prev => prev.filter(w => w.id !== newWave.id));
     }, 3000);
@@ -241,18 +222,15 @@ const DrawingApp = () => {
       offsetY = 0;
     const target = e.target as HTMLCanvasElement;
     if (e.nativeEvent instanceof MouseEvent) {
-      // Mouse event
       const rect = target.getBoundingClientRect();
       offsetX = e.nativeEvent.clientX - rect.left;
       offsetY = e.nativeEvent.clientY - rect.top;
     } else {
-      // Touch event
       const rect = target.getBoundingClientRect();
       offsetX = e.nativeEvent.touches[0].clientX - rect.left;
       offsetY = e.nativeEvent.touches[0].clientY - rect.top;
     }
 
-    // Scale coordinates
     offsetX /= target.clientWidth / 800;
     offsetY /= target.clientHeight / 480;
     return {
@@ -280,7 +258,8 @@ const DrawingApp = () => {
     try {
       e.preventDefault();
     } catch {
-      // prevent default doesn't work on touch events
+      console.log('hmm');
+      
     }
 
     const { x, y } = getCoordinates(e);
@@ -302,7 +281,6 @@ const DrawingApp = () => {
 
     if (currentLineRef.current.length > 0) {
       if (currentLineRef.current.length === 1) {
-        // Draw a single point
         brushRef.current?.draw({
           from: currentLineRef.current[0],
           to: currentLineRef.current[0],
@@ -349,7 +327,6 @@ const DrawingApp = () => {
   ) => {
     draw(brushRef.current!, points, color, brushSize);
   };
-
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleDrawingUpdate = (
     data: CanvasAction,
@@ -357,17 +334,14 @@ const DrawingApp = () => {
   ) => {
     switch (data.type) {
       case "init": {
-        // Load the initial canvas state
         const img = new Image();
         img.onload = () => {
           context.drawImage(img, 0, 0);
-          // Redraw current line if one is in progress
           if (currentLineRef.current.length > 0 && tool !== "fill") {
             drawLine(currentLineRef.current, color, brushSizes[tool]);
           }
         };
         img.src = `data:image/png;base64,${data.image}`;
-        // Set the history ID if provided (from restore)
         if (data.historyId) {
           setCurrentHistoryId(data.historyId);
         }
@@ -390,10 +364,8 @@ const DrawingApp = () => {
         setConnectedUsers(data.users);
         break;
       case "wave": {
-        // Another user waved - add a new wave with random offset and scale
         const newWave = createWave();
         setWaves(prev => [...prev, newWave]);
-        // Remove this wave after 3 seconds
         setTimeout(() => {
           setWaves(prev => prev.filter(w => w.id !== newWave.id));
         }, 3000);
@@ -479,18 +451,23 @@ const DrawingApp = () => {
                   <UserIcon size={16} className="mr-1" />
                   {connectedUsers.length}
                 </Button>
-                {waves.map(wave => (
-                  <span 
-                    key={wave.id}
-                    className="wave text-2xl absolute top-full left-1/2 -translate-x-1/2 mt-1"
-                    style={{ 
-                      marginLeft: `${wave.offset}px`,
-                      fontSize: `${wave.scale * 2}rem`
-                    }}
-                  >
-                    👋
-                  </span>
-                ))}
+                {waves.map(wave => {
+                  
+                  return (
+                    <span 
+                      key={wave.id}
+                      className="wave text-2xl absolute top-full mt-1"
+                      style={{ 
+                        [wave.isSent ? 'right' : 'left']: '75%',
+                        [wave.isSent ? 'marginRight' : 'marginLeft']: `${Math.abs(wave.offset)}px`,
+                        fontSize: `${wave.scale * 2}rem`
+                      }}
+                      title={wave.isSent ? "You waved!" : "Someone waved back!"}
+                    >
+                      {wave.isSent ? '👋' : '👋🏻'}
+                    </span>
+                  );
+                })}
               </div>
             )}
             <Button variant="outline" onClick={downloadCanvas} title="Download">
@@ -547,7 +524,6 @@ const DrawingApp = () => {
             />
           </div>
         
-        {/* History Panel Overlay */}
         <div className={`
           fixed inset-0 z-50 bg-black/50
           ${showHistoryMobile ? 'block' : 'hidden'}
