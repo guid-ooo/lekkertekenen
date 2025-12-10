@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import HistoryPanel from "@/components/HistoryPanel";
+import { WaveDisplay, createWave } from "@/components/WaveDisplay";
 import PxBrush from "../shared/PxBrush";
 import { CanvasAction, HistoryItem, User } from "../shared/Actions";
 import { fill, draw, colors, brushSizes } from "../shared/Utilities";
@@ -23,14 +24,6 @@ const setStoredUsername = (username: string) => {
   localStorage.setItem('drawingUsername', username);
 };
 
-const createWave = (baseId: number = Date.now(), isSent: boolean = false, username?: string) => ({
-  id: baseId + Math.random(),
-  offset: Math.random() * 60 - 30,
-  scale: 1 - Math.random() * 0.4,
-  isSent,
-  username
-});
-
 const DrawingApp = () => {
   const [tool, setTool] = useState<keyof typeof brushSizes | "fill">("brush-medium");
   const [color, setColor] = useState(colors.black);
@@ -40,7 +33,7 @@ const DrawingApp = () => {
   const [showHistoryMobile, setShowHistoryMobile] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState<User[]>([]);
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
-  const [waves, setWaves] = useState<Array<{ id: number; offset: number; scale: number; isSent: boolean; username?: string }>>([]);
+  const [waves, setWaves] = useState<Array<{ id: number; offset: number; scale: number; isSent: boolean; username?: string; createdAt: number }>>([]);
   const [isWaveDisabled, setIsWaveDisabled] = useState(false);
   const [username, setUsername] = useState(getStoredUsername());
   const [showUsernameDialog, setShowUsernameDialog] = useState(!getStoredUsername());
@@ -392,8 +385,16 @@ const DrawingApp = () => {
         setConnectedUsers(data.users);
         break;
       case "wave": {
-        const newWave = createWave(Date.now() + Math.random(), false, data.username);
+        // Check if this is the first wave from this user
+        const isFirstWave = !waves.some(w => !w.isSent && w.username === data.username);
+        const offset = isFirstWave ? 0 : Math.random() * 30 - 15;
+        const newWave = {
+          ...createWave(Date.now() + Math.random(), false, data.username),
+          offset
+        };
         setWaves(prev => [...prev, newWave]);
+        
+        // Remove wave at 3s
         setTimeout(() => {
           setWaves(prev => prev.filter(w => w.id !== newWave.id));
         }, 3000);
@@ -531,23 +532,7 @@ const DrawingApp = () => {
                     ))}
                   </div>
                 )}
-                {waves.map(wave => {
-                  
-                  return (
-                    <span 
-                      key={wave.id}
-                      className="wave text-2xl absolute top-full mt-1 z-[60]"
-                      style={{ 
-                        [wave.isSent ? 'right' : 'left']: '40%',
-                        [wave.isSent ? 'marginRight' : 'marginLeft']: `${Math.abs(wave.offset)}px`,
-                        fontSize: `${wave.scale * 2}rem`
-                      }}
-                      title={wave.isSent ? "You waved!" : `${wave.username || 'Someone'} waved back!`}
-                    >
-                      {wave.isSent ? '👋' : '👋🏻'}
-                    </span>
-                  );
-                })}
+                <WaveDisplay waves={waves} />
               </div>
             )}
             <Button variant="outline" onClick={downloadCanvas} title="Download">
