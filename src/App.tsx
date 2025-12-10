@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { PaintBucket, Download, History, X, ImagePlus, User as UserIcon, Save } from "lucide-react";
 import {
   Dialog,
@@ -14,11 +15,20 @@ import PxBrush from "../shared/PxBrush";
 import { CanvasAction, HistoryItem, User } from "../shared/Actions";
 import { fill, draw, colors, brushSizes } from "../shared/Utilities";
 
-const createWave = (baseId: number = Date.now(), isSent: boolean = false) => ({
+const getStoredUsername = () => {
+  return localStorage.getItem('drawingUsername') || '';
+};
+
+const setStoredUsername = (username: string) => {
+  localStorage.setItem('drawingUsername', username);
+};
+
+const createWave = (baseId: number = Date.now(), isSent: boolean = false, username?: string) => ({
   id: baseId + Math.random(),
   offset: Math.random() * 60 - 30,
   scale: 1 - Math.random() * 0.4,
-  isSent
+  isSent,
+  username
 });
 
 const DrawingApp = () => {
@@ -30,8 +40,12 @@ const DrawingApp = () => {
   const [showHistoryMobile, setShowHistoryMobile] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState<User[]>([]);
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
-  const [waves, setWaves] = useState<Array<{ id: number; offset: number; scale: number; isSent: boolean }>>([]);
+  const [waves, setWaves] = useState<Array<{ id: number; offset: number; scale: number; isSent: boolean; username?: string }>>([]);
   const [isWaveDisabled, setIsWaveDisabled] = useState(false);
+  const [username, setUsername] = useState(getStoredUsername());
+  const [showUsernameDialog, setShowUsernameDialog] = useState(!getStoredUsername());
+  const [tempUsername, setTempUsername] = useState('');
+  const [showUserList, setShowUserList] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
   const wsRef = useRef<WebSocket>(null);
@@ -76,6 +90,9 @@ const DrawingApp = () => {
       
       setTimeout(() => {
         if (wsRef.current === ws) {
+          if (username) {
+            ws.send(JSON.stringify({ type: "set-username", username }));
+          }
           requestHistory();
         }
       }, 100);
@@ -170,6 +187,18 @@ const DrawingApp = () => {
     });
   };
 
+  const handleSetUsername = () => {
+    if (tempUsername.trim()) {
+      const newUsername = tempUsername.trim();
+      setUsername(newUsername);
+      setStoredUsername(newUsername);
+      setShowUsernameDialog(false);
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        sendUpdate({ type: "set-username", username: newUsername });
+      }
+    }
+  };
+
   const triggerWave = () => {
     if (isWaveDisabled) return;
 
@@ -190,9 +219,8 @@ const DrawingApp = () => {
       return;
     }
 
-    sendUpdate({ type: "wave" });
-    // Add a new wave with random offset and scale - mark as sent
-    const newWave = createWave(Date.now(), true);
+    sendUpdate({ type: "wave", username });
+    const newWave = createWave(Date.now(), true, username);
     setWaves(prev => [...prev, newWave]);
     setTimeout(() => {
       setWaves(prev => prev.filter(w => w.id !== newWave.id));
@@ -364,7 +392,7 @@ const DrawingApp = () => {
         setConnectedUsers(data.users);
         break;
       case "wave": {
-        const newWave = createWave();
+        const newWave = createWave(Date.now() + Math.random(), false, data.username);
         setWaves(prev => [...prev, newWave]);
         setTimeout(() => {
           setWaves(prev => prev.filter(w => w.id !== newWave.id));
@@ -387,9 +415,44 @@ const DrawingApp = () => {
 
   return (
     <div className="mx-auto flex flex-col items-center p-2 sm:p-3 md:p-4 max-w-full h-screen overflow-hidden">
+      <Dialog open={showUsernameDialog} onOpenChange={setShowUsernameDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Welcome! 👋</DialogTitle>
+            <DialogDescription>
+              Vul je naam in zodat anderen zien wie er aan het tekenen is!
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={tempUsername}
+            onChange={(e) => setTempUsername(e.target.value)}
+            placeholder="Your name"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && tempUsername.trim()) {
+                handleSetUsername();
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button onClick={handleSetUsername} disabled={!tempUsername.trim()}>
+              Doorgaan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="flex gap-4 mb-2 md:mb-4 items-center w-full flex-wrap">
-        <h1 className="hidden md:block text-2xl font-bold text-slate-900">
-          🧑‍🎨 {"Lekker Krabbelen"}
+        <h1 className="hidden md:flex text-2xl font-bold text-slate-900 items-center gap-2">
+          <button 
+            onClick={() => {
+              setTempUsername(username);
+              setShowUsernameDialog(true);
+            }}
+            className="hover:scale-110 transition-transform cursor-pointer"
+            title={`Change name (currently: ${username})`}
+          >
+            🧑‍🎨
+          </button>
+          {"Lekker Krabbelen"}
         </h1>
         <div className="flex gap-4 items-center flex-wrap justify-end flex-grow">
           <div className="flex gap-2 items-center">
@@ -441,7 +504,11 @@ const DrawingApp = () => {
 
           <div className="flex gap-2">
             {connectedUsers.length >= 2 && (
-              <div className="relative">
+              <div 
+                className="relative"
+                onMouseEnter={() => setShowUserList(true)}
+                onMouseLeave={() => setShowUserList(false)}
+              >
                 <Button 
                   variant="outline" 
                   onClick={triggerWave}
@@ -451,18 +518,31 @@ const DrawingApp = () => {
                   <UserIcon size={16} className="mr-1" />
                   {connectedUsers.length}
                 </Button>
+                {showUserList && (
+                  <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-md shadow-lg p-2 min-w-[150px] z-50">
+                    <div className="text-xs font-semibold text-gray-500 mb-1 px-2">Nu online:</div>
+                    {connectedUsers.map((user) => (
+                      <div 
+                        key={user.id} 
+                        className="px-2 py-1 text-sm text-gray-700 whitespace-nowrap"
+                      >
+                        {user.name || 'Onbekend'} {user.name === username ? '(you)' : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {waves.map(wave => {
                   
                   return (
                     <span 
                       key={wave.id}
-                      className="wave text-2xl absolute top-full mt-1"
+                      className="wave text-2xl absolute top-full mt-1 z-[60]"
                       style={{ 
-                        [wave.isSent ? 'right' : 'left']: '75%',
+                        [wave.isSent ? 'right' : 'left']: '40%',
                         [wave.isSent ? 'marginRight' : 'marginLeft']: `${Math.abs(wave.offset)}px`,
                         fontSize: `${wave.scale * 2}rem`
                       }}
-                      title={wave.isSent ? "You waved!" : "Someone waved back!"}
+                      title={wave.isSent ? "You waved!" : `${wave.username || 'Someone'} waved back!`}
                     >
                       {wave.isSent ? '👋' : '👋🏻'}
                     </span>

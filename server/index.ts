@@ -454,7 +454,7 @@ const server = Bun.serve({
 
       // Assign user a unique ID
       const userId = crypto.randomUUID();
-      const user: User = { id: userId };
+      const user: User = { id: userId, name: '' };
       connectedUsers.set(ws, user);
 
       console.log(`User ${userId} connected`);
@@ -598,6 +598,21 @@ const server = Bun.serve({
             });
             
             return; // Don't broadcast the save action itself
+          }
+          case "set-username": {
+            const user = connectedUsers.get(ws);
+            if (user) {
+              user.name = data.username;
+              console.log(`User ${user.id} set name to: ${data.username}`);
+              
+              // Broadcast updated presence to all clients
+              const presenceUpdate = JSON.stringify({
+                type: "presence-update",
+                users: Array.from(connectedUsers.values()),
+              });
+              server.publish("drawing", presenceUpdate);
+            }
+            return; // Don't broadcast the set-username action itself
           }
           case "wave":
             // Simply broadcast the wave to all clients

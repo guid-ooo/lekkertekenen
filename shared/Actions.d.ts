@@ -29,7 +29,8 @@ interface GetHistoryAction {
 export interface HistoryItem {
   id: string;
   timestamp: number;
-  image: string; // base64 PNG
+  image: string;
+  createdBy?: string;
 }
 
 interface HistoryUpdateAction {
@@ -54,15 +55,22 @@ interface SaveToHistoryAction {
 
 interface WaveAction {
   type: "wave";
+  username?: string;
 }
 
 export interface User {
   id: string;
+  name: string;
 }
 
 interface PresenceUpdateAction {
   type: "presence-update";
   users: User[];
+}
+
+interface SetUsernameAction {
+  type: "set-username";
+  username: string;
 }
 
 export type CanvasAction = 
@@ -76,4 +84,5 @@ export type CanvasAction =
   | DeleteHistoryAction
   | SaveToHistoryAction
   | PresenceUpdateAction
-  | WaveAction;
+  | WaveAction
+  | SetUsernameAction;
