@@ -13,6 +13,9 @@ interface WaveDisplayProps {
   waves: Wave[];
 }
 
+// Different hand emoji skin tones
+const HAND_EMOJIS = ['👋🏻', '👋🏼', '👋🏽', '👋🏾', '👋🏿', '👋'];
+
 export const WaveDisplay = ({ waves }: WaveDisplayProps) => {
   const [, forceUpdate] = useState({});
 
@@ -36,6 +39,13 @@ export const WaveDisplay = ({ waves }: WaveDisplayProps) => {
     acc[key].push(wave);
     return acc;
   }, {} as Record<string, Wave[]>);
+
+  // Assign a hand emoji to each unique username
+  const usernames = Object.keys(groupedWaves);
+  const usernameToEmoji = usernames.reduce((acc, username, idx) => {
+    acc[username] = HAND_EMOJIS[idx % HAND_EMOJIS.length];
+    return acc;
+  }, {} as Record<string, string>);
 
   return (
     <>
@@ -65,6 +75,7 @@ export const WaveDisplay = ({ waves }: WaveDisplayProps) => {
         // Check if any wave is still in its animation period (2.5s)
         const now = Date.now();
         const hasActiveAnimation = userWaves.some(wave => (now - wave.createdAt) < 2500);
+        const handEmoji = usernameToEmoji[username];
         
         return (
           <div
@@ -93,7 +104,7 @@ export const WaveDisplay = ({ waves }: WaveDisplayProps) => {
                       fontSize: `${wave.scale * 2}rem`,
                     }}
                   >
-                    👋🏻
+                    {handEmoji}
                   </span>
                 </div>
               ))}
